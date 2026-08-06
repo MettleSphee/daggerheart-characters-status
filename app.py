@@ -71,18 +71,18 @@ _UNIQUE_CONDITIONS = [
         "poisoned", "Poisoned",
         "While Poisoned, the target must roll a d6 before they make an action roll. "
         "On a result of 4 or lower, they must mark a Stress.",
-        "poisoned", "#7a2f4e", "#4e1530",
+        "poisoned", "#2b5e2e", "#143a17",
     ),
     (
         "cursed", "Cursed",
         "While the target is Cursed, you can mark a Stress when that target rolls with Hope "
         "to make the roll be with Fear instead.",
-        "cursed", "#3a3a6f", "#1c1c45",
+        "dread", "#3a3a6f", "#1c1c45",
     ),
     (
         "ignited", "Ignited",
         "While Ignited, the target takes 1d4 magic damage when they make an action roll.",
-        "ignited", "#d96b1f", "#8f3d0e",
+        "flame", "#d96b1f", "#8f3d0e",
     ),
     (
         "exiled", "Exiled",
@@ -98,7 +98,7 @@ _UNIQUE_CONDITIONS = [
     (
         "entranced", "Entranced",
         "While Entranced, the target can't act and is Vulnerable.",
-        "entranced", "#9f3ad9", "#6f1f9c",
+        "entranced", "#c9a227", "#8a6513",
     ),
     (
         "enveloped", "Enveloped",
@@ -109,7 +109,7 @@ _UNIQUE_CONDITIONS = [
     (
         "dazed", "Dazed",
         "While Dazed, they can't use their Regeneration action but are immune to magic damage.",
-        "dazed", "#8f8f2e", "#5e5e17",
+        "spiral", "#9a3d8f", "#4a1240",
     ),
     (
         "rooted", "Rooted",
@@ -124,7 +124,7 @@ _UNIQUE_CONDITIONS = [
     (
         "chilled", "Chilled",
         "While the target is Chilled, they have disadvantage on attack rolls.",
-        "chilled", "#3a9fd9", "#1f6f9c",
+        "snowflake", "#3a9fd9", "#1f6f9c",
     ),
     (
         "trapped", "Trapped",
@@ -136,7 +136,7 @@ _UNIQUE_CONDITIONS = [
         "guilty", "Guilty",
         "When the Seraph succeeds on a standard attack against a Guilty target, they deal "
         "Severe damage instead of their standard damage.",
-        "guilty", "#8f8f8f", "#5e5e5e",
+        "scales", "#8f8f8f", "#5e5e5e",
     ),
 ]
 

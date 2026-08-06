@@ -20,9 +20,10 @@
       <div class="field"><label>Name</label><input type="text" id="newName" placeholder="e.g. Frightened"></div>
       <div class="field"><label>Description</label><input type="text" id="newDesc" placeholder="Describe the effect..."></div>
       <div class="field"><label>Icon</label><select id="newIcon" class="icon-select"></select></div>
-      <div class="field"><label>Badge color</label>
+      <div class="field"><label>Badge colors</label>
         <div class="color-picker-row">
-          <input type="color" id="newColor" value="#1a4a7a">
+          <input type="color" id="newColorLight" value="#1a4a7a" title="Light color">
+          <input type="color" id="newColorDark" value="#0e253a" title="Dark color">
           <label class="auto-color"><input type="checkbox" id="newAuto" checked>Auto</label>
         </div>
       </div>
@@ -52,9 +53,10 @@
       <div class="field"><label>Icon</label><select id="editIcon" class="icon-select"></select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Badge color</label>
+      <div class="field"><label>Badge colors</label>
         <div class="color-picker-row">
-          <input type="color" id="editColor" value="#1a4a7a">
+          <input type="color" id="editColorLight" value="#1a4a7a" title="Light color">
+          <input type="color" id="editColorDark" value="#0e253a" title="Dark color">
           <label class="auto-color"><input type="checkbox" id="editAuto" checked>Auto</label>
         </div>
       </div>
@@ -85,6 +87,16 @@ const editName = document.getElementById('editName');
 const editDesc = document.getElementById('editDesc');
 const saveEditBtn = document.getElementById('saveEditBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
+const newColorLight = document.getElementById('newColorLight');
+const newColorDark = document.getElementById('newColorDark');
+const newAuto = document.getElementById('newAuto');
+const editColorLight = document.getElementById('editColorLight');
+const editColorDark = document.getElementById('editColorDark');
+const editAuto = document.getElementById('editAuto');
+const addPreview = document.getElementById('addPreview');
+const editPreview = document.getElementById('editPreview');
+const newIcon = document.getElementById('newIcon');
+const editIcon = document.getElementById('editIcon');
 
 const NO_ICON = '__none__';
 function fillIconSelect(select, current) {
@@ -146,9 +158,10 @@ function openEdit(id) {
   fillIconSelect(editIcon, cond.icon);
   const cols = currentColors();
   editAuto.checked = cols.auto;
-  if (cols.light) editColor.value = cols.light;
-  syncColorInputs(editAuto, editColor);
-  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+  if (cols.light) editColorLight.value = cols.light;
+  if (cols.dark) editColorDark.value = cols.dark;
+  syncColorInputs(editAuto, editColorLight, editColorDark);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
   modal.classList.add('open');
   editName.focus();
 }
@@ -170,19 +183,20 @@ function deleteCondition(id) {
     .catch(function (err) { showToast('Failed: ' + err.message, true); });
 }
 
-function syncColorInputs(autoCheck, colorInput) {
-  colorInput.disabled = autoCheck.checked;
+function syncColorInputs(autoCheck, lightInput, darkInput) {
+  lightInput.disabled = autoCheck.checked;
+  darkInput.disabled = autoCheck.checked;
 }
 
-function updatePreview(name, iconVal, auto, colorVal, previewEl) {
+function updatePreview(name, iconVal, auto, colorLightVal, colorDarkVal, previewEl) {
   let light, dark;
   if (auto) {
     const h = hashColors(name);
     light = h.light;
     dark = h.dark;
   } else {
-    dark = colorVal;
-    light = colorVal;
+    light = colorLightVal;
+    dark = colorDarkVal;
   }
   const cond = { description: name, color_light: light, color_dark: dark };
   if (iconVal && iconVal !== NO_ICON) {
@@ -197,13 +211,12 @@ addBtn.addEventListener('click', function () {
   if (!name) { showToast('Name is required', true); return; }
   const iconVal = newIcon.value === NO_ICON ? null : newIcon.value;
   const auto = newAuto.checked;
-  const color = newColor.value;
   postJSON('/api/conditions', {
     name: name,
     description: newDesc.value.trim(),
     icon: iconVal,
-    color_light: auto ? null : color,
-    color_dark: auto ? null : color,
+    color_light: auto ? null : newColorLight.value,
+    color_dark: auto ? null : newColorDark.value,
     client_id: CLIENT_ID
   })
     .then(function () {
@@ -212,8 +225,8 @@ addBtn.addEventListener('click', function () {
       newDesc.value = '';
       newIcon.value = NO_ICON;
       newAuto.checked = true;
-      syncColorInputs(newAuto, newColor);
-      updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+      syncColorInputs(newAuto, newColorLight, newColorDark);
+      updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
       loadState();
     })
     .catch(function (err) { showToast('Failed: ' + err.message, true); });
@@ -225,13 +238,12 @@ saveEditBtn.addEventListener('click', function () {
   if (!name) { showToast('Name is required', true); return; }
   const iconVal = editIcon.value === NO_ICON ? null : editIcon.value;
   const auto = editAuto.checked;
-  const color = editColor.value;
   postJSON('/api/conditions/' + encodeURIComponent(editingId), {
     name: name,
     description: editDesc.value.trim(),
     icon: iconVal,
-    color_light: auto ? null : color,
-    color_dark: auto ? null : color,
+    color_light: auto ? null : editColorLight.value,
+    color_dark: auto ? null : editColorDark.value,
     client_id: CLIENT_ID
   })
     .then(function () {
@@ -255,30 +267,36 @@ function loadState() {
 
 fillIconSelect(newIcon, null);
 newAuto.addEventListener('change', function () {
-  syncColorInputs(newAuto, newColor);
-  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+  syncColorInputs(newAuto, newColorLight, newColorDark);
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
 });
-newColor.addEventListener('input', function () {
-  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+newColorLight.addEventListener('input', function () {
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
+});
+newColorDark.addEventListener('input', function () {
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
 });
 newIcon.addEventListener('change', function () {
-  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
 });
 newName.addEventListener('input', function () {
-  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColorLight.value, newColorDark.value, addPreview);
 });
 editAuto.addEventListener('change', function () {
-  syncColorInputs(editAuto, editColor);
-  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+  syncColorInputs(editAuto, editColorLight, editColorDark);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
 });
-editColor.addEventListener('input', function () {
-  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+editColorLight.addEventListener('input', function () {
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
+});
+editColorDark.addEventListener('input', function () {
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
 });
 editIcon.addEventListener('change', function () {
-  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
 });
 editName.addEventListener('input', function () {
-  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColorLight.value, editColorDark.value, editPreview);
 });
 
 connectStream(function () { loadState(); });
