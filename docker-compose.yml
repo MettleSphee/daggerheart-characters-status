@@ -1,0 +1,25 @@
+# ZimaOS / Docker Compose deployment for the Daggerheart status page.
+#
+# Usage on ZimaOS:
+#   Option A (UI): Apps -> "Compose"/App Store -> import this file.
+#   Option B (Terminal): docker compose up -d
+#
+# The image is published to GHCR by the GitHub Actions workflow on every push to main.
+# IMPORTANT: replace YOUR_USERNAME below with your actual GitHub username, e.g. ghcr.io/mettle/gitrepo...
+# Public repo images need no credentials; private ones require `docker login ghcr.io` with a PAT.
+
+services:
+  daggerheart-status:
+    image: ghcr.io/YOUR_USERNAME/daggerheart-characters-status:latest
+    container_name: daggerheart-status
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-5000}:5000"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

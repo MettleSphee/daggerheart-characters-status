@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Characters</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-head">
+    <a class="back-link" href="/">&larr; Menu</a>
+    <h1>Characters</h1>
+    <span class="conn-dot" id="connDot"></span>
+  </div>
+
+  <div class="char-bar">
+    <label for="charSelect">Character</label>
+    <select id="charSelect"></select>
+    <div class="actions">
+      <button class="btn btn-success" id="newBtn">+ New Character</button>
+      <button class="btn btn-danger" id="deleteBtn">Delete</button>
+    </div>
+  </div>
+
+  <div id="noChars" class="section" style="display:none; text-align:center; color:#a0a0b8;">
+    No characters yet. Click <strong>+ New Character</strong> to create one.
+  </div>
+
+  <form id="charForm" class="section" style="display:none;">
+    <div class="field-row">
+      <div class="field"><label>Name</label><input type="text" id="f_name"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field field-short"><label>HP</label><input type="number" id="f_hp" min="0"></div>
+      <div class="field chk-group"><label>Marked HP</label><div class="chk-boxes" id="row_hp"></div></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field field-short"><label>Stress</label><input type="number" id="f_stress" min="0"></div>
+      <div class="field chk-group"><label>Marked Stress</label><div class="chk-boxes" id="row_stress"></div></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field field-short"><label>Armor</label><input type="number" id="f_armor" min="0"></div>
+      <div class="field chk-group"><label>Marked Armor</label><div class="chk-boxes" id="row_armor"></div></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field field-short"><label>Hope</label><input type="number" id="f_hope" min="0"></div>
+      <div class="field chk-group"><label>Marked Hope</label><div class="chk-boxes" id="row_hope"></div></div>
+      <div class="field field-short"><label>Scars</label><input type="number" id="f_scars" min="0"></div>
+    </div>
+
+    <h2>Conditions</h2>
+    <div class="field-row">
+      <div class="field">
+        <label>Add a condition</label>
+        <select id="condSelect"><option value="">-- Choose a condition --</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <div class="conditions-line" id="condList"></div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+const INITIAL_CHARACTERS = {{ characters | tojson }};
+const INITIAL_CONDITIONS = {{ conditions | tojson }};
+setConditions(INITIAL_CONDITIONS);
+
+const CLIENT_SAVE_KEY = 'dhcs_selected_char';
+
+let characters = INITIAL_CHARACTERS;
+let currentId = localStorage.getItem(CLIENT_SAVE_KEY);
+let current = null;
+let saveTimer = null;
+
+const els = {
+  select: document.getElementById('charSelect'),
+  newBtn: document.getElementById('newBtn'),
+  deleteBtn: document.getElementById('deleteBtn'),
+  noChars: document.getElementById('noChars'),
+  form: document.getElementById('charForm'),
+  name: document.getElementById('f_name'),
+  hp: document.getElementById('f_hp'),
+  stress: document.getElementById('f_stress'),
+  armor: document.getElementById('f_armor'),
+  hope: document.getElementById('f_hope'),
+  scars: document.getElementById('f_scars'),
+  condSelect: document.getElementById('condSelect'),
+  condList: document.getElementById('condList')
+};
+
+const ROW_MAP = {
+  marked_hp: { row: 'row_hp', count: 'hp' },
+  marked_stress: { row: 'row_stress', count: 'stress' },
+  marked_armor: { row: 'row_armor', count: 'armor' },
+  marked_hope: { row: 'row_hope', count: 'hope', scar: 'scars' }
+};
+
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 350);
+}
+
+function saveNow() {
+  if (!current) return;
+  postJSON('/api/characters/' + encodeURIComponent(current.id), Object.assign({}, current, { client_id: CLIENT_ID }))
+    .catch(function (err) {
+      showToast('Save failed: ' + err.message, true);
+    });
+}
+
+function populateSelect() {
+  els.select.innerHTML = characters.map(function (ch) {
+    return '<option value="' + escapeHtml(ch.id) + '"' + (ch.id === currentId ? ' selected' : '') + '>' + escapeHtml(ch.name) + '</option>';
+  }).join('');
+  const exists = characters.some(function (c) { return c.id === currentId; });
+  if (!exists) currentId = characters.length ? characters[0].id : null;
+  if (currentId) localStorage.setItem(CLIENT_SAVE_KEY, currentId);
+}
+
+function renderRow(markedKey) {
+  const info = ROW_MAP[markedKey];
+  const row = document.getElementById(info.row);
+  const count = current[info.count];
+  const scarCount = info.scar ? current[info.scar] : 0;
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const scarred = scarCount > 0 && i >= count - scarCount;
+    if (scarred && current[markedKey][i]) current[markedKey][i] = false;
+    html += '<input type="checkbox" data-idx="' + i + '"' +
+      (current[markedKey][i] ? ' checked' : '') +
+      (scarred ? ' disabled' : '') + ' title="' + (scarred ? 'Scarred (unavailable)' : '') + '">';
+  }
+  row.innerHTML = html;
+  row.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      const idx = parseInt(cb.dataset.idx, 10);
+      current[markedKey][idx] = cb.checked;
+      saveSoon();
+    });
+  });
+}
+
+function renderConditions() {
+  const applied = current.conditions || [];
+  if (applied.length) {
+    els.condList.innerHTML = applied.map(function (name) {
+      return '<span class="condition-pill" style="display:inline-flex;align-items:center;gap:4px;">' +
+        badgeHTML(name) +
+        '<button type="button" class="btn-icon" data-name="' + escapeHtml(name) + '" title="Remove condition">&times;</button></span>';
+    }).join('');
+    els.condList.querySelectorAll('button[data-name]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        removeCondition(btn.dataset.name);
+      });
+    });
+  } else {
+    els.condList.innerHTML = '<span class="track-label">No conditions applied</span>';
+  }
+
+  const avail = CONDITIONS.filter(function (c) {
+    return applied.indexOf(c.name) === -1;
+  }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+  els.condSelect.innerHTML = '<option value="">-- Choose a condition --</option>' +
+    avail.map(function (c) { return '<option value="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</option>'; }).join('');
+}
+
+function renderForm() {
+  els.name.value = current.name;
+  els.hp.value = current.hp;
+  els.stress.value = current.stress;
+  els.armor.value = current.armor;
+  els.hope.value = current.hope;
+  els.scars.value = current.scars;
+  renderRow('marked_hp');
+  renderRow('marked_stress');
+  renderRow('marked_armor');
+  renderRow('marked_hope');
+  renderConditions();
+  populateSelect();
+  els.form.style.display = 'block';
+  els.noChars.style.display = 'none';
+}
+
+function selectCharacter(id) {
+  const found = characters.find(function (c) { return c.id === id; });
+  if (!found) return;
+  currentId = id;
+  localStorage.setItem(CLIENT_SAVE_KEY, id);
+  current = deepClone(found);
+  renderForm();
+}
+
+function loadCharacters() {
+  fetchJSON('/api/characters').then(function (data) {
+    characters = data.characters;
+    populateSelect();
+    if (currentId && characters.some(function (c) { return c.id === currentId; })) {
+      selectCharacter(currentId);
+    } else if (characters.length) {
+      selectCharacter(characters[0].id);
+    } else {
+      current = null;
+      currentId = null;
+      els.form.style.display = 'none';
+      els.noChars.style.display = 'block';
+      els.select.innerHTML = '';
+    }
+  }).catch(function () { /* ignore */ });
+}
+
+function refreshFromServer() {
+  if (!current) { loadCharacters(); return; }
+  const ae = document.activeElement;
+  if (ae && els.form.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return; /* user is editing */
+  loadCharacters();
+}
+
+els.select.addEventListener('change', function () { selectCharacter(els.select.value); });
+
+els.newBtn.addEventListener('click', function () {
+  const name = prompt('Character name:');
+  if (name === null) return;
+  const trimmed = name.trim();
+  postJSON('/api/characters', { name: trimmed || 'Unnamed', client_id: CLIENT_ID })
+    .then(function (res) {
+      showToast('Character created');
+      return fetchJSON('/api/characters').then(function (data) {
+        characters = data.characters;
+        selectCharacter(res.id);
+      });
+    })
+    .catch(function (err) { showToast('Failed: ' + err.message, true); });
+});
+
+els.deleteBtn.addEventListener('click', function () {
+  if (!current) return;
+  if (!confirm('Delete "' + current.name + '"? This cannot be undone.')) return;
+  deleteJSON('/api/characters/' + encodeURIComponent(current.id), { client_id: CLIENT_ID })
+    .then(function () {
+      showToast('Character deleted');
+      currentId = null;
+      loadCharacters();
+    })
+    .catch(function (err) { showToast('Failed: ' + err.message, true); });
+});
+
+function bindNumberInput(fieldEl, fieldKey, markedKey) {
+  fieldEl.addEventListener('change', function () {
+    let val = parseInt(fieldEl.value, 10);
+    if (isNaN(val) || val < 0) val = 0;
+    fieldEl.value = val;
+    current[fieldKey] = val;
+    const arrKey = { hp: 'marked_hp', stress: 'marked_stress', armor: 'marked_armor', hope: 'marked_hope' }[fieldKey];
+    if (arrKey) {
+      const arr = current[arrKey];
+      while (arr.length < val) arr.push(false);
+      arr.length = val;
+      renderRow(arrKey);
+    }
+    if (fieldKey === 'scars') renderRow('marked_hope');
+    saveSoon();
+  });
+}
+
+bindNumberInput(els.hp, 'hp');
+bindNumberInput(els.stress, 'stress');
+bindNumberInput(els.armor, 'armor');
+bindNumberInput(els.hope, 'hope');
+bindNumberInput(els.scars, 'scars');
+
+els.name.addEventListener('input', function () {
+  current.name = els.name.value;
+  saveSoon();
+});
+
+els.condSelect.addEventListener('change', function () {
+  const name = els.condSelect.value;
+  if (!name) return;
+  current.conditions = current.conditions || [];
+  if (current.conditions.indexOf(name) === -1) current.conditions.push(name);
+  renderConditions();
+  saveSoon();
+});
+
+function removeCondition(name) {
+  current.conditions = (current.conditions || []).filter(function (c) { return c !== name; });
+  renderConditions();
+  saveSoon();
+}
+
+connectStream(function () { refreshFromServer(); });
+loadCharacters();
+</script>
+</body>
+</html>

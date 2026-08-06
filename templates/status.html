@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Status</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-head">
+    <a class="back-link" href="/">&larr; Menu</a>
+    <h1>Live Status</h1>
+    <span class="conn-dot" id="connDot"></span>
+  </div>
+  <div class="status-grid" id="statusGrid"></div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+const INITIAL_CHARACTERS = {{ characters | tojson }};
+const INITIAL_CONDITIONS = {{ conditions | tojson }};
+setConditions(INITIAL_CONDITIONS);
+
+const grid = document.getElementById('statusGrid');
+
+function render(characters) {
+  if (!characters.length) {
+    grid.innerHTML = '<div class="empty-state">No characters yet. Players can create them on the <a href="/characters">Characters</a> page.</div>';
+    return;
+  }
+  grid.innerHTML = characters.map(function (ch) {
+    let conditions = ch.conditions || [];
+    conditions = conditions.filter(function (c, i) { return conditions.indexOf(c) === i; });
+    const condHTML = conditions.length
+      ? conditions.map(function (c) { return badgeHTML(c); }).join('')
+      : '<span class="track-label">None</span>';
+    return '<div class="char-card">' +
+      '<h3>' + escapeHtml(ch.name) + '</h3>' +
+      trackHTML('HP', ch.marked_hp, ch.hp, 0) +
+      trackHTML('Stress', ch.marked_stress, ch.stress, 0) +
+      trackHTML('Armor', ch.marked_armor, ch.armor, 0) +
+      trackHTML('Hope', ch.marked_hope, ch.hope, ch.scars) +
+      '<div class="track"><div class="track-label"><span>Conditions</span></div>' +
+      '<div class="conditions-line">' + condHTML + '</div></div>' +
+      '</div>';
+  }).join('');
+}
+
+function loadState() {
+  Promise.all([
+    fetchJSON('/api/characters'),
+    fetchJSON('/api/conditions')
+  ]).then(function (results) {
+    setConditions(results[1].conditions);
+    render(results[0].characters);
+  }).catch(function () { /* keep last state */ });
+}
+
+loadState();
+connectStream(loadState);
+</script>
+</body>
+</html>

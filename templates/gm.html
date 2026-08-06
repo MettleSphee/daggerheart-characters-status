@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Master</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-head">
+    <a class="back-link" href="/">&larr; Menu</a>
+    <h1>Game Master</h1>
+    <span class="conn-dot" id="connDot"></span>
+  </div>
+  <div class="gm-grid" id="gmGrid"></div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+const INITIAL_CHARACTERS = {{ characters | tojson }};
+const INITIAL_CONDITIONS = {{ conditions | tojson }};
+setConditions(INITIAL_CONDITIONS);
+
+const grid = document.getElementById('gmGrid');
+let characters = INITIAL_CHARACTERS;
+let timers = {};
+
+function render() {
+  grid.innerHTML = '';
+  if (!characters.length) {
+    grid.innerHTML = '<div class="empty-state">No characters yet.</div>';
+    return;
+  }
+  characters.forEach(function (ch) { grid.appendChild(makePanel(ch)); });
+}
+
+function makePanel(ch) {
+  const local = deepClone(ch);
+  const key = local.id;
+  const panel = document.createElement('div');
+  panel.className = 'gm-panel';
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.value = local.name;
+
+  const nameWrap = document.createElement('div');
+  nameWrap.className = 'field';
+  const nameLabel = document.createElement('label');
+  nameLabel.textContent = 'Name';
+  nameWrap.appendChild(nameLabel);
+  nameWrap.appendChild(nameInput);
+  panel.appendChild(nameWrap);
+
+  const rowEls = {};
+  [['hp', 'marked_hp', 0], ['stress', 'marked_stress', 0], ['armor', 'marked_armor', 0]].forEach(function (spec) {
+    const countKey = spec[0], markKey = spec[1];
+    const wrap = document.createElement('div');
+    wrap.className = 'field-row';
+    const numField = document.createElement('div');
+    numField.className = 'field field-short';
+    const label = document.createElement('label');
+    label.textContent = countKey.charAt(0).toUpperCase() + countKey.slice(1);
+    const num = document.createElement('input');
+    num.type = 'number';
+    num.min = '0';
+    num.value = local[countKey];
+    numField.appendChild(label);
+    numField.appendChild(num);
+    wrap.appendChild(numField);
+
+    const chkField = document.createElement('div');
+    chkField.className = 'field chk-group';
+    const chkLabel = document.createElement('label');
+    chkLabel.textContent = 'Marked ' + label.textContent;
+    const boxes = document.createElement('div');
+    boxes.className = 'chk-boxes';
+    chkField.appendChild(chkLabel);
+    chkField.appendChild(boxes);
+    wrap.appendChild(chkField);
+    panel.appendChild(wrap);
+    rowEls[countKey] = { num: num, boxes: boxes, markKey: markKey };
+
+    num.addEventListener('change', function () {
+      let val = parseInt(num.value, 10);
+      if (isNaN(val) || val < 0) val = 0;
+      num.value = val;
+      local[countKey] = val;
+      const arr = local[markKey];
+      while (arr.length < val) arr.push(false);
+      arr.length = val;
+      if (countKey === 'hope') renderMarks(rowEls.hope.boxes, local, 'hope');
+      else renderMarks(boxes, local, countKey);
+      scheduleSave(local, key);
+    });
+  });
+
+  /* Hope + scars row */
+  const hopeWrap = document.createElement('div');
+  hopeWrap.className = 'field-row';
+  const hopeNumField = document.createElement('div');
+  hopeNumField.className = 'field field-short';
+  const hopeLabel = document.createElement('label');
+  hopeLabel.textContent = 'Hope';
+  const hopeNum = document.createElement('input');
+  hopeNum.type = 'number';
+  hopeNum.min = '0';
+  hopeNum.value = local.hope;
+  hopeNumField.appendChild(hopeLabel);
+  hopeNumField.appendChild(hopeNum);
+  hopeWrap.appendChild(hopeNumField);
+
+  const hopeChkField = document.createElement('div');
+  hopeChkField.className = 'field chk-group';
+  const hopeChkLabel = document.createElement('label');
+  hopeChkLabel.textContent = 'Marked Hope';
+  const hopeBoxes = document.createElement('div');
+  hopeBoxes.className = 'chk-boxes';
+  hopeChkField.appendChild(hopeChkLabel);
+  hopeChkField.appendChild(hopeBoxes);
+  hopeWrap.appendChild(hopeChkField);
+
+  const scarsField = document.createElement('div');
+  scarsField.className = 'field field-short';
+  const scarsLabel = document.createElement('label');
+  scarsLabel.textContent = 'Scars';
+  const scarsNum = document.createElement('input');
+  scarsNum.type = 'number';
+  scarsNum.min = '0';
+  scarsNum.value = local.scars;
+  scarsField.appendChild(scarsLabel);
+  scarsField.appendChild(scarsNum);
+  hopeWrap.appendChild(scarsField);
+  panel.appendChild(hopeWrap);
+  rowEls.hope = { num: hopeNum, boxes: hopeBoxes, markKey: 'marked_hope' };
+
+  hopeNum.addEventListener('change', function () {
+    let val = parseInt(hopeNum.value, 10);
+    if (isNaN(val) || val < 0) val = 0;
+    hopeNum.value = val;
+    local.hope = val;
+    const arr = local.marked_hope;
+    while (arr.length < val) arr.push(false);
+    arr.length = val;
+    renderMarks(hopeBoxes, local, 'hope');
+    scheduleSave(local, key);
+  });
+
+  scarsNum.addEventListener('change', function () {
+    let val = parseInt(scarsNum.value, 10);
+    if (isNaN(val) || val < 0) val = 0;
+    scarsNum.value = val;
+    local.scars = val;
+    renderMarks(hopeBoxes, local, 'hope');
+    scheduleSave(local, key);
+  });
+
+  /* Conditions */
+  const condWrap = document.createElement('div');
+  condWrap.className = 'field';
+  const condLabel = document.createElement('label');
+  condLabel.textContent = 'Conditions';
+  const condRow = document.createElement('div');
+  condRow.className = 'conditions-line';
+  condWrap.appendChild(condLabel);
+  condWrap.appendChild(condRow);
+  panel.appendChild(condWrap);
+
+  const addWrap = document.createElement('div');
+  addWrap.className = 'field';
+  addWrap.style.marginTop = '8px';
+  const addLabel = document.createElement('label');
+  addLabel.textContent = 'Add condition';
+  const addSel = document.createElement('select');
+  addLabel.appendChild(addSel);
+  addWrap.appendChild(addLabel);
+  panel.appendChild(addWrap);
+
+  function renderConditions() {
+    const applied = local.conditions || [];
+    condRow.innerHTML = '';
+    if (!applied.length) {
+      const none = document.createElement('span');
+      none.className = 'track-label';
+      none.textContent = 'None';
+      condRow.appendChild(none);
+    } else {
+      applied.forEach(function (name) {
+        const pill = document.createElement('span');
+        pill.style.display = 'inline-flex';
+        pill.style.alignItems = 'center';
+        pill.style.gap = '4px';
+        pill.innerHTML = badgeHTML(name);
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn-icon';
+        rm.title = 'Remove condition';
+        rm.innerHTML = '&times;';
+        rm.addEventListener('click', function () {
+          local.conditions = applied.filter(function (c) { return c !== name; });
+          renderConditions();
+          scheduleSave(local, key);
+        });
+        pill.appendChild(rm);
+        condRow.appendChild(pill);
+      });
+    }
+    addSel.innerHTML = '<option value="">-- Add --</option>' +
+      CONDITIONS.filter(function (c) { return applied.indexOf(c.name) === -1; })
+        .sort(function (a, b) { return a.name.localeCompare(b.name); })
+        .map(function (c) { return '<option value="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</option>'; })
+        .join('');
+  }
+
+  addSel.addEventListener('change', function () {
+    const name = addSel.value;
+    if (!name) return;
+    local.conditions = local.conditions || [];
+    if (local.conditions.indexOf(name) === -1) local.conditions.push(name);
+    renderConditions();
+    addSel.blur();
+    scheduleSave(local, key);
+  });
+
+  function renderMarks(boxes, obj, countKey) {
+    const markKey = { hp: 'marked_hp', stress: 'marked_stress', armor: 'marked_armor', hope: 'marked_hope' }[countKey];
+    const count = obj[countKey];
+    const scarCount = countKey === 'hope' ? (obj.scars || 0) : 0;
+    boxes.innerHTML = '';
+    for (let i = 0; i < count; i++) {
+      const scarred = scarCount > 0 && i >= count - scarCount;
+      if (scarred) obj[markKey][i] = false;
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!obj[markKey][i];
+      cb.disabled = scarred;
+      cb.title = scarred ? 'Scarred (unavailable)' : '';
+      cb.addEventListener('change', function () {
+        obj[markKey][i] = cb.checked;
+        cb.blur();
+        scheduleSave(local, key);
+      });
+      boxes.appendChild(cb);
+    }
+  }
+
+  nameInput.addEventListener('change', function () {
+    local.name = nameInput.value;
+    scheduleSave(local, key);
+  });
+
+  renderMarks(rowEls.hp.boxes, local, 'hp');
+  renderMarks(rowEls.stress.boxes, local, 'stress');
+  renderMarks(rowEls.armor.boxes, local, 'armor');
+  renderMarks(hopeBoxes, local, 'hope');
+  renderConditions();
+
+  return panel;
+}
+
+function scheduleSave(local, key) {
+  clearTimeout(timers[key]);
+  timers[key] = setTimeout(function () {
+    postJSON('/api/characters/' + encodeURIComponent(key), Object.assign({}, local, { client_id: CLIENT_ID }))
+      .then(function () { scheduleRefresh(loadState); })
+      .catch(function (err) { showToast('Save failed: ' + err.message, true); });
+  }, 250);
+}
+
+function loadState() {
+  Promise.all([
+    fetchJSON('/api/characters'),
+    fetchJSON('/api/conditions')
+  ]).then(function (results) {
+    setConditions(results[1].conditions);
+    characters = results[0].characters;
+    render();
+  }).catch(function () { /* keep last state */ });
+}
+
+connectStream(function () { scheduleRefresh(loadState); });
+loadState();
+</script>
+</body>
+</html>

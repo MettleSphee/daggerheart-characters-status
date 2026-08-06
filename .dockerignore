@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+data/
+__pycache__/
+*.pyc
+Reference/
+SPEC.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md

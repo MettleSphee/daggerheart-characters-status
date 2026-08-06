@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codex</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-head">
+    <a class="back-link" href="/">&larr; Menu</a>
+    <h1>Codex</h1>
+    <span class="conn-dot" id="connDot"></span>
+  </div>
+
+  <div class="section">
+    <h2>Add a Condition</h2>
+    <div class="codex-toolbar">
+      <div class="field"><label>Name</label><input type="text" id="newName" placeholder="e.g. Frightened"></div>
+      <div class="field"><label>Description</label><input type="text" id="newDesc" placeholder="Describe the effect..."></div>
+      <div class="field"><label>Icon</label><select id="newIcon" class="icon-select"></select></div>
+      <div class="field"><label>Badge color</label>
+        <div class="color-picker-row">
+          <input type="color" id="newColor" value="#1a4a7a">
+          <label class="auto-color"><input type="checkbox" id="newAuto" checked>Auto</label>
+        </div>
+      </div>
+      <div class="add-btn-wrap">
+        <button class="btn btn-success" id="addBtn">Add Condition</button>
+      </div>
+    </div>
+    <div class="badge-preview" id="addPreview"></div>
+  </div>
+
+  <div class="section">
+    <h2>Conditions</h2>
+    <div class="codex-list" id="condList"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2>Edit Condition</h2>
+    <div class="field-row">
+      <div class="field"><label>Name</label><input type="text" id="editName"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Description</label><textarea id="editDesc"></textarea></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Icon</label><select id="editIcon" class="icon-select"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Badge color</label>
+        <div class="color-picker-row">
+          <input type="color" id="editColor" value="#1a4a7a">
+          <label class="auto-color"><input type="checkbox" id="editAuto" checked>Auto</label>
+        </div>
+      </div>
+    </div>
+    <div class="badge-preview" id="editPreview"></div>
+    <div class="modal-buttons">
+      <button class="btn btn-primary" id="saveEditBtn">Save</button>
+      <button class="btn btn-secondary" id="cancelEditBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+const INITIAL_CONDITIONS = {{ conditions | tojson }};
+const INITIAL_ICONS = {{ icons | tojson }};
+setConditions(INITIAL_CONDITIONS);
+
+let conditions = INITIAL_CONDITIONS;
+let editingId = null;
+
+const listEl = document.getElementById('condList');
+const newName = document.getElementById('newName');
+const newDesc = document.getElementById('newDesc');
+const addBtn = document.getElementById('addBtn');
+const modal = document.getElementById('editModal');
+const editName = document.getElementById('editName');
+const editDesc = document.getElementById('editDesc');
+const saveEditBtn = document.getElementById('saveEditBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+const NO_ICON = '__none__';
+function fillIconSelect(select, current) {
+  select.innerHTML = '<option value="' + NO_ICON + '">None</option>' + INITIAL_ICONS.map(function (fn) {
+    return '<option value="' + escapeHtml(fn) + '">' + escapeHtml(fn) + '</option>';
+  }).join('');
+  select.value = current || NO_ICON;
+}
+
+function currentColors() {
+  if (editingId) {
+    const cond = conditions.find(function (c) { return c.id === editingId; });
+    if (cond && !cond.default) {
+      return {
+        auto: !(cond.color_light && cond.color_dark),
+        light: cond.color_light || null,
+        dark: cond.color_dark || null
+      };
+    }
+  }
+  return { auto: true, light: null, dark: null };
+}
+
+function render() {
+  const sorted = conditions.slice().sort(function (a, b) {
+    if (a.default !== b.default) return a.default ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  listEl.innerHTML = sorted.map(function (c) {
+    return '<div class="codex-row">' +
+      '<div class="codex-badge">' + badgeHTML(c.name) + '</div>' +
+      '<div class="codex-body">' +
+        '<div class="codex-name">' + escapeHtml(c.name) +
+          (c.default ? '<span class="tag">Default</span>' : '') + '</div>' +
+        '<div class="codex-desc">' + (c.description ? escapeHtml(c.description) : '<em>No description</em>') + '</div>' +
+      '</div>' +
+      '<div class="codex-actions">' +
+        (c.default ? '' :
+          '<button class="btn btn-secondary btn-small" data-edit="' + escapeHtml(c.id) + '">Edit</button>' +
+          '<button class="btn btn-danger btn-small" data-del="' + escapeHtml(c.id) + '">Delete</button>') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  listEl.querySelectorAll('button[data-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openEdit(btn.dataset.edit); });
+  });
+  listEl.querySelectorAll('button[data-del]').forEach(function (btn) {
+    btn.addEventListener('click', function () { deleteCondition(btn.dataset.del); });
+  });
+}
+
+function openEdit(id) {
+  const cond = conditions.find(function (c) { return c.id === id; });
+  if (!cond || cond.default) return;
+  editingId = id;
+  editName.value = cond.name;
+  editDesc.value = cond.description || '';
+  fillIconSelect(editIcon, cond.icon);
+  const cols = currentColors();
+  editAuto.checked = cols.auto;
+  if (cols.light) editColor.value = cols.light;
+  syncColorInputs(editAuto, editColor);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+  modal.classList.add('open');
+  editName.focus();
+}
+
+function closeEdit() {
+  modal.classList.remove('open');
+  editingId = null;
+}
+
+function deleteCondition(id) {
+  const cond = conditions.find(function (c) { return c.id === id; });
+  if (!cond) return;
+  if (!confirm('Delete condition "' + cond.name + '"?')) return;
+  deleteJSON('/api/conditions/' + encodeURIComponent(id), { client_id: CLIENT_ID })
+    .then(function () {
+      showToast('Condition deleted');
+      loadState();
+    })
+    .catch(function (err) { showToast('Failed: ' + err.message, true); });
+}
+
+function syncColorInputs(autoCheck, colorInput) {
+  colorInput.disabled = autoCheck.checked;
+}
+
+function updatePreview(name, iconVal, auto, colorVal, previewEl) {
+  let light, dark;
+  if (auto) {
+    const h = hashColors(name);
+    light = h.light;
+    dark = h.dark;
+  } else {
+    dark = colorVal;
+    light = colorVal;
+  }
+  const cond = { description: name, color_light: light, color_dark: dark };
+  if (iconVal && iconVal !== NO_ICON) {
+    cond.icon = iconVal;
+    cond.icon_available = true;
+  }
+  previewEl.innerHTML = buildBadgeHTML(name || 'Preview', cond, '');
+}
+
+addBtn.addEventListener('click', function () {
+  const name = newName.value.trim();
+  if (!name) { showToast('Name is required', true); return; }
+  const iconVal = newIcon.value === NO_ICON ? null : newIcon.value;
+  const auto = newAuto.checked;
+  const color = newColor.value;
+  postJSON('/api/conditions', {
+    name: name,
+    description: newDesc.value.trim(),
+    icon: iconVal,
+    color_light: auto ? null : color,
+    color_dark: auto ? null : color,
+    client_id: CLIENT_ID
+  })
+    .then(function () {
+      showToast('Condition added');
+      newName.value = '';
+      newDesc.value = '';
+      newIcon.value = NO_ICON;
+      newAuto.checked = true;
+      syncColorInputs(newAuto, newColor);
+      updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+      loadState();
+    })
+    .catch(function (err) { showToast('Failed: ' + err.message, true); });
+});
+
+saveEditBtn.addEventListener('click', function () {
+  if (!editingId) return;
+  const name = editName.value.trim();
+  if (!name) { showToast('Name is required', true); return; }
+  const iconVal = editIcon.value === NO_ICON ? null : editIcon.value;
+  const auto = editAuto.checked;
+  const color = editColor.value;
+  postJSON('/api/conditions/' + encodeURIComponent(editingId), {
+    name: name,
+    description: editDesc.value.trim(),
+    icon: iconVal,
+    color_light: auto ? null : color,
+    color_dark: auto ? null : color,
+    client_id: CLIENT_ID
+  })
+    .then(function () {
+      showToast('Condition updated');
+      closeEdit();
+      loadState();
+    })
+    .catch(function (err) { showToast('Failed: ' + err.message, true); });
+});
+
+cancelEditBtn.addEventListener('click', closeEdit);
+modal.addEventListener('click', function (e) { if (e.target === modal) closeEdit(); });
+
+function loadState() {
+  fetchJSON('/api/conditions').then(function (data) {
+    conditions = data.conditions;
+    setConditions(conditions);
+    render();
+  }).catch(function () { /* keep last state */ });
+}
+
+fillIconSelect(newIcon, null);
+newAuto.addEventListener('change', function () {
+  syncColorInputs(newAuto, newColor);
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+});
+newColor.addEventListener('input', function () {
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+});
+newIcon.addEventListener('change', function () {
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+});
+newName.addEventListener('input', function () {
+  updatePreview(newName.value, newIcon.value, newAuto.checked, newColor.value, addPreview);
+});
+editAuto.addEventListener('change', function () {
+  syncColorInputs(editAuto, editColor);
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+});
+editColor.addEventListener('input', function () {
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+});
+editIcon.addEventListener('change', function () {
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+});
+editName.addEventListener('input', function () {
+  updatePreview(editName.value, editIcon.value, editAuto.checked, editColor.value, editPreview);
+});
+
+connectStream(function () { loadState(); });
+render();
+</script>
+</body>
+</html>
