@@ -15,6 +15,8 @@ CONDITIONS_FILE = os.path.join(DATA_DIR, "conditions.json")
 ICONS_DIR = os.path.join(BASE_DIR, "static", "icons")
 ICON_EXTS = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
+SEED_VERSION = 2
+
 _lock = threading.Lock()
 _sse_clients = []
 
@@ -214,8 +216,45 @@ def get_conditions():
     with _lock:
         store = load_json(CONDITIONS_FILE, None)
     if store is None or not isinstance(store.get("conditions"), list):
-        store = {"conditions": build_default_conditions()}
+        store = {"version": SEED_VERSION, "conditions": build_default_conditions()}
         save_conditions(store)
+        return store
+    return migrate_conditions(store)
+
+
+def migrate_conditions(store):
+    """Refresh built-in (default) conditions from the current seed whenever the
+    seed version bumps. Custom conditions are left untouched. Runs lazily on load."""
+    version = store.get("version", 0)
+    if version >= SEED_VERSION:
+        return store
+
+    seed = build_default_conditions()
+    seed_by_id = {c["id"]: c for c in seed}
+    existing_by_id = {c["id"]: c for c in store["conditions"]}
+
+    migrated = []
+    used = set()
+    for sc in seed:
+        cid = sc["id"]
+        used.add(cid)
+        if cid in existing_by_id and existing_by_id[cid].get("default"):
+            merged = dict(existing_by_id[cid])
+            merged["name"] = sc["name"]
+            merged["description"] = sc["description"]
+            merged["icon"] = sc["icon"]
+            merged["color_light"] = sc["color_light"]
+            merged["color_dark"] = sc["color_dark"]
+            merged["default"] = True
+            migrated.append(merged)
+        else:
+            migrated.append(dict(sc))
+    for cond in store["conditions"]:
+        if cond["id"] not in used:
+            migrated.append(cond)
+
+    store = {"version": SEED_VERSION, "conditions": migrated}
+    save_conditions(store)
     return store
 
 
