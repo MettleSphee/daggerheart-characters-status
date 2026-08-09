@@ -225,14 +225,17 @@ function makePanel(ch) {
 
   function renderMarks(boxes, obj, countKey) {
     const markKey = { hp: 'marked_hp', stress: 'marked_stress', armor: 'marked_armor', hope: 'marked_hope' }[countKey];
-    let count = obj[countKey];
-    if (countKey === 'hope') count = Math.max(0, count - (obj.scars || 0));
-    if (obj[markKey].length > count) obj[markKey].length = count;
+    const count = obj[countKey];
+    const scarCount = countKey === 'hope' ? (obj.scars || 0) : 0;
     boxes.innerHTML = '';
     for (let i = 0; i < count; i++) {
+      const scarred = scarCount > 0 && i >= count - scarCount;
+      if (scarred) obj[markKey][i] = false;
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = !!obj[markKey][i];
+      cb.disabled = scarred;
+      cb.title = scarred ? 'Scarred (unavailable)' : '';
       cb.addEventListener('change', function () {
         obj[markKey][i] = cb.checked;
         cb.blur();

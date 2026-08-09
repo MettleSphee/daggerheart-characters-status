@@ -40,7 +40,7 @@ function render(characters) {
       trackHTML('HP', ch.marked_hp, ch.hp) +
       trackHTML('Stress', ch.marked_stress, ch.stress) +
       trackHTML('Armor', ch.marked_armor, ch.armor) +
-      trackHTML('Hope', ch.marked_hope, Math.max(0, ch.hope - ch.scars), true) +
+      trackHTML('Hope', ch.marked_hope, ch.hope, true, ch.scars) +
       '<div class="track"><div class="track-label"><span>Conditions</span></div>' +
       '<div class="conditions-line">' + condHTML + '</div></div>' +
       '</div>';
