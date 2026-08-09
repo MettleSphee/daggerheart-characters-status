@@ -346,6 +346,8 @@ def normalize_character(raw, char_id):
     }
     for key, count_key in marked_keys.items():
         max_value = data[count_key]
+        if key == "marked_hope":
+            max_value = max(0, max_value - data["scars"])
         arr = data.get(key)
         if not isinstance(arr, list):
             arr = []

@@ -52,22 +52,20 @@ function badgeHTML(name, extraClass) {
   return buildBadgeHTML(name, getCondition(name), extraClass);
 }
 
-function marksStatusHTML(marked, total, scarred) {
+function marksStatusHTML(marked, total) {
   let html = '<div class="marks">';
   for (let i = 0; i < total; i++) {
-    const isScarred = scarred > 0 && i >= total - scarred;
-    const on = marked[i] && !isScarred;
-    let cls = 'mark';
-    if (on) cls += ' mark-on';
-    else if (isScarred) cls += ' mark-scar';
-    html += '<span class="' + cls + '">' + (on ? '&#10003;' : isScarred ? '&#10007;' : '') + '</span>';
+    const on = !!marked[i];
+    html += '<span class="mark' + (on ? ' mark-on' : '') + '">' + (on ? '&#10003;' : '') + '</span>';
   }
   return html + '</div>';
 }
 
-function trackHTML(label, marked, total, scarred) {
-  return '<div class="track"><div class="track-label"><span>' + escapeHtml(label) + '</span><span>' + marked.length + '/' + total + '</span></div>' +
-    marksStatusHTML(marked, total, scarred) + '</div>';
+function trackHTML(label, marked, total, countUp) {
+  const on = marked.filter(Boolean).length;
+  const shown = countUp ? on + '/' + total : Math.max(0, total - on) + '/' + total;
+  return '<div class="track"><div class="track-label"><span>' + escapeHtml(label) + '</span><span>' + shown + '</span></div>' +
+    marksStatusHTML(marked, total) + '</div>';
 }
 
 function deepClone(obj) {

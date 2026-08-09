@@ -129,15 +129,13 @@ function populateSelect() {
 function renderRow(markedKey) {
   const info = ROW_MAP[markedKey];
   const row = document.getElementById(info.row);
-  const count = current[info.count];
-  const scarCount = info.scar ? current[info.scar] : 0;
+  let count = current[info.count];
+  if (info.scar) count = Math.max(0, count - (current[info.scar] || 0));
+  if (current[markedKey].length > count) current[markedKey].length = count;
   let html = '';
   for (let i = 0; i < count; i++) {
-    const scarred = scarCount > 0 && i >= count - scarCount;
-    if (scarred && current[markedKey][i]) current[markedKey][i] = false;
     html += '<input type="checkbox" data-idx="' + i + '"' +
-      (current[markedKey][i] ? ' checked' : '') +
-      (scarred ? ' disabled' : '') + ' title="' + (scarred ? 'Scarred (unavailable)' : '') + '">';
+      (current[markedKey][i] ? ' checked' : '') + '>';
   }
   row.innerHTML = html;
   row.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
