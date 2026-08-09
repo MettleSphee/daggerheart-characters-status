@@ -15,7 +15,7 @@ CONDITIONS_FILE = os.path.join(DATA_DIR, "conditions.json")
 ICONS_DIR = os.path.join(BASE_DIR, "static", "icons")
 ICON_EXTS = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
-SEED_VERSION = 2
+SEED_VERSION = 3
 
 _lock = threading.Lock()
 _sse_clients = []
@@ -100,7 +100,7 @@ _UNIQUE_CONDITIONS = [
     (
         "entranced", "Entranced",
         "While Entranced, the target can't act and is Vulnerable.",
-        "entranced", "#c9a227", "#8a6513",
+        "fairy-wand", "#c9a227", "#8a6513",
     ),
     (
         "enveloped", "Enveloped",
@@ -132,7 +132,7 @@ _UNIQUE_CONDITIONS = [
         "trapped", "Trapped",
         "While Trapped, the target is Restrained and Vulnerable until they break free, "
         "ending both conditions, with a successful Instinct Roll.",
-        "trapped", "#6f5e8f", "#453a5e",
+        "cobweb_1", "#6f5e8f", "#453a5e",
     ),
     (
         "guilty", "Guilty",
